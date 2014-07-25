@@ -25,34 +25,13 @@ end
 function add!(graph::Graph,
               subject::URI,
               predicate::URI,
-              object::Number)
-    add_generic!(graph, subject, predicate, object)
-end
-
-function add!(graph::Graph,
-              subject::URI,
-              predicate::URI,
-              object::String)
-    add_generic!(graph, subject, predicate, object)
-end
-
-function add!(graph::Graph,
-              subject::URI,
-              predicate::URI,
-              object::URI)
-    add_generic!(graph, subject, predicate, object)
-end
-
-function add_generic!(graph::Graph,
-              subject::URI,
-              predicate::URI,
               object::Union(Number,String,URI))
     # Get dict mappings:
-    subject_dict = get(graph.statements, subject, Dict())
-    predicate_set = get(subject_dict, predicate, Set())
+    subject_dict = get(graph.statements, subject, Dict{URI,Set{Union(Number,String,URI)}}())
+    predicate_set = get(subject_dict, predicate, Set{Union(Number,String,URI)}())
 
     # Add statement:
-    add!(predicate_set, object)
+    push!(predicate_set, object)
 
     # Store newly created dicts/sets:
     if !haskey(subject_dict, object)
@@ -65,7 +44,7 @@ end
 
 function add!(graph::Graph,
               statement::Statement)
-    add(graph, statement.subject, statement.predicate, statement.object)
+    add!(graph, statement.subject, statement.predicate, statement.object)
 end
 
 function ntriples(graph::Graph)
@@ -75,6 +54,8 @@ end
 end # module RDF
 
 # Tests...
+using RDF
+
 g = RDF.Graph(URIParser.URI("http://example.org"))
 add!(g, URIParser.URI("http://test.org/1"), URIParser.URI("http://test.org/2"), URIParser.URI("http://test.org/1"))
 
