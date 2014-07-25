@@ -16,5 +16,5 @@ before_install:
 script:
   - if [ $JULIAVERSION = "julianightlies" ]; then julia --code-coverage -e 'Pkg.init(); Pkg.clone(pwd()); Pkg.test("RDF")'
   - if [ $JULIAVERSION = "julianightlies" ]; then julia -e 'Pkg.add("Coverage"); using Coverage; Coveralls.submit(Coveralls.process_folder())'; fi
-  - if [ $JULIAVERSION = "juliarelease" ]; then julia -e 'Pkg.init(); Pkg.clone(pwd()); Pkg.test("RDF")'
+  - if [ $JULIAVERSION = "juliarelease" ]; then julia -e 'Pkg.init(); Pkg.clone(pwd()); Pkg.test("RDF")' ; fi
 
