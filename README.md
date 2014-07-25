@@ -1,7 +1,7 @@
 Julia RDF Package
 =================
 
-Experiments in Julia. This is a package in very early stages.
+RDF package for working with RDF N-Triples and N-Quads in Julia. Supports serialization as RDF Turtle too (eventually).
 
 ### License
 
