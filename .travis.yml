@@ -17,5 +17,5 @@ script:
   - if [ $JULIAVERSION = "julianightlies" ] ; then julia --code-coverage -e 'Pkg.init(); Pkg.clone(pwd()); Pkg.test("RDF")' ; fi
   - if [ $JULIAVERSION = "juliarelease" ] ; then julia -e 'Pkg.init(); Pkg.clone(pwd()); Pkg.test("RDF")' ; fi
 after_success:
-  - if [ $JULIAVERSION = "julianightlies" ] ; then julia -e 'Pkg.dir("RDF"); Pkg.add("Coverage"); using Coverage; Coveralls.submit(Coveralls.process_folder())'; fi
+  - if [ $JULIAVERSION = "julianightlies" ] ; then julia -e 'cd(Pkg.dir("RDF")); Pkg.add("Coverage"); using Coverage; Coveralls.submit(Coveralls.process_folder())'; fi
 
