@@ -8,10 +8,18 @@ export
     # functions (graph manipulation)
     push!,
     pop!,
+    # functions (graph loading/deserialization)
+    load_ntriples!,
+    load_nquads!,
+    load_turtle!,
     # functions (graph serialization)
     ntriples,
     nquads,
     turtle
+    # functions at Base scope (iterator support)
+    # Base.start
+    # Base.done
+    # Base.next
 
 type Graph
     name::URI
@@ -20,6 +28,72 @@ type Graph
 
     Graph(name::URI) = new(name, 0, Dict{String,Dict{String,Set{Union(Number,String,URI)}}}())
 end
+
+# TODO Keeping arrays instead of iterators is memory inefficient.
+type GraphIterator
+    subjects::Array{String}
+    predicates::Array{String}
+    objects::Array{Union(Number,String,URI)}
+    predicates_under_subject::Any
+    current_subject::Any
+    current_predicate::Any
+end
+
+function load_ntriples!(graph::Graph,
+                        rdf_in::String)
+    subject, predicate, object = split(rdf_in, r"\s+", 3)
+    replace(object, r"\s+?.\s*$", "") # Get rid of the trailing dot.
+
+    # Extract object type annotations/language annotation:
+    object_type = nothing
+    object_language = nothing
+    if ismatch(r"\"^^<.+>$", object)
+        object, object_type = rsplit(object, "^^", 2)
+    elseif ismatch(r"\"@.+$", object)
+        object, object_language = rsplit(object, "@", 2)
+    end
+
+    # TODO N-Triples syntax checking.
+
+    # Conversion of an object to its appropriate type:
+    if beginswith(object, "<") && endswith(object, ">")
+        object = URI(object[2:length(object) - 1])
+    elseif beginswith(object, "\"") && endswith(object, "\"")
+        object = URI(object[2:length(object) - 1])
+    elseif ismatch(r"^\d+\.\d+$")
+        object = float(object)
+    elseif ismatch(r"^\d+$", object)
+        object = int(object)
+    else
+        # TODO Error handling.
+    end
+
+    # Object type and language annotations are currently not captured.
+    push!(graph,
+          subject[2:length(subject) - 1],
+          predicate[2:length(subject) - 1],
+          object)
+end
+
+function load_ntriples!(graph::Graph,
+                        rdf_in::IO)
+    for line in eachline(rdf_in)
+        load_ntriples!(graph, line)
+    end
+end
+
+function load_nquads!(graphs::Array{Graph},
+                      in::Any)
+    # Approach: remove the graph part, then use N-Triples loading:
+    # TODO
+end
+
+function load_turtle!(graph::Graph,
+                      in::Any)
+    # TODO
+end
+
+# Adding/removing statements
 
 function push!(graph::Graph,
                subject::URI,
@@ -119,6 +193,51 @@ function pop!(graph::Graph,
     # Final number of removed statements:
     return 1
 end
+
+### Extracting statements
+
+function get_by_subject(graph::Graph,
+                        subject::URI)
+    # Get dict mappings;
+    if !haskey(graph.statements, string(subject))
+        return 0
+    end
+    subject_dict = graph.statements[string(subject)]
+
+    # Final number of removed statements:
+    return removed_statements
+end
+
+### Iteration
+
+function Base.start(graph::Graph)
+    return RDF.GraphIterator(collect(keys(graph.statements)), [], [], [], [], [])
+end
+
+function Base.next(graph::Graph,
+              state::GraphIterator)
+    current_object = shift!(state.objects)
+    return ((state.current_subject, state.current_predicate, current_object), state)
+end
+
+function Base.done(graph::Graph,
+              state::GraphIterator)
+    if length(state.subjects) == 0 && length(state.predicates) == 0 && length(state.objects) == 0
+        return true
+    end
+    if length(state.predicates) == 0 && length(state.objects) == 0
+        state.current_subject = shift!(state.subjects)
+        state.predicates_under_subject = graph.statements[state.current_subject]
+        state.predicates = collect(keys(state.predicates_under_subject))
+    end
+    if length(state.objects) == 0
+        state.current_predicate = shift!(state.predicates)
+        state.objects = collect(state.predicates_under_subject[state.current_predicate])
+    end
+    return false
+end
+
+### Serialization
 
 function ntriples(graph::Graph,
                   out::Any)
