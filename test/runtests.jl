@@ -4,7 +4,7 @@ using Base.Test
 using URIParser
 
 @test Graph(URI("http://graphuri.test")).name == URI("http://graphuri.test")
-@test_throws Graph("http://not.an.URI.but.a.string")
+@test_throws MethodError Graph("http://not.an.URI.but.a.string")
 
 # On run...
 #   1 -- insert literals using Julia native types

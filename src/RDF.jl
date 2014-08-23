@@ -184,7 +184,7 @@ function load_turtle!(graph::Graph,
     # contain any information (too short for even blank node usage), but
     # are valid nonetheless.
     lookahead = Char[]
-    lookahead_size = 5
+    lookahead_size = 6
     for n in range(1, lookahead_size)
         if eof(ttl_in)
             return
@@ -328,7 +328,7 @@ function ttl_next!(graph::Graph,
             transition!(state, bnode)
             return false
         else
-            transition!(state, iri)
+            transition!(state, :iri)
             return false
         end
     elseif current_state == :object
@@ -534,7 +534,20 @@ function ttl_next!(graph::Graph,
     elseif current_state == :stringsl5
         ttl_string!(graph, state, terminals, token, input, lookahead, '\'', uint8(5))
     elseif current_state == :statement
-        if input in [ '@', 'p', 'P', 'b', 'B' ]
+        # TODO check whether separators in the lookahead are correct
+        if input in [ '@', 'p', 'P', 'b', 'B' ] &&
+           (input == '@' ||
+            lowercase(lookahead[1]) == 'r' &&
+                lowercase(lookahead[2]) == 'e' &&
+                lowercase(lookahead[3]) == 'f' &&
+                lowercase(lookahead[4]) == 'i' &&
+                lowercase(lookahead[5]) == 'x' &&
+                lookahead[6] in [ ' ', '\r', '\n', '\t' ] ||
+            lowercase(lookahead[1]) == 'a' &&
+                lowercase(lookahead[2]) == 's' &&
+                lowercase(lookahead[3]) == 'e' &&
+                lookahead[4] in [ ' ', '\r', '\n', '\t' ]
+           )
             transition!(state, [ :statement, :directive ])
             return false
         elseif input == '#'
