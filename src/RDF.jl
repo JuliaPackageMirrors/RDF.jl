@@ -87,6 +87,11 @@ type GraphIterator
     current_predicate::Any
 end
 
+# String conversion of IRIs.
+function Base.string(iri::IRI)
+    return iri.iri
+end
+
 function ==(left::IRI,
             right::IRI)
     return left.iri == right.iri
@@ -484,11 +489,8 @@ function ttl_next!(graph::Graph,
         transition!(state, [ :typeiri, :iri ])
         return true
     elseif current_state == :typeiri
-        # TODO -- verify
         typeiri = Base.pop!(terminals)
         last(terminals).iri = typeiri
-        println(last(terminals))
-        exit(0)
         transition!(state)
         return false
     elseif current_state == :bnode
