@@ -1,10 +1,9 @@
 module RDF
 
-using URIParser
-
 export
     # types
     Graph,
+    IRI,
     Literal,
     # functions (graph manipulation)
     push!,
@@ -29,22 +28,26 @@ RDF_LANG = [ '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
              'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
              '-' ]
 
+type IRI
+    iri::String
+end
+
 type Literal
     value::Union(Bool,Number,String)
-    iri::Union(URI,Nothing)
+    iri::Union(IRI,Nothing)
     langtag::Union(String,Nothing)
 
     Literal(value::Union(Bool,Number,String)) = new(value,
                                                     nothing,
                                                     nothing)
-    Literal(value::Union(Bool,Number,String), iri::URI) = new(value,
+    Literal(value::Union(Bool,Number,String), iri::IRI) = new(value,
                                                               iri,
                                                               nothing)
     Literal(value::Union(Bool,Number,String), langtag::String) = new(value,
                                                                      nothing,
                                                                      langtag)
     Literal(value::Union(Bool,Number,String),
-            iri::Union(URI,Nothing),
+            iri::Union(IRI,Nothing),
             langtag::Union(String,Nothing)) = new(value,
                                                   iri,
                                                   langtag)
@@ -59,33 +62,37 @@ type LabeledBlankNode
 end
 
 type Graph
-    name::URI
-    base::URI
-    prefixes::Dict{String,URI}
+    name::IRI
+    base::IRI
+    prefixes::Dict{String,IRI}
     blanknode::Uint64
     size::Int64
-    statements::Dict{String,Dict{String,Set{Union(Literal,URI)}}}
+    statements::Dict{String,Dict{String,Set{Union(Literal,IRI)}}}
 
-    Graph(name::URI) = new(name,
-                           URI(""),
-                           Dict{String,URI}(),
+    Graph(name::IRI) = new(name,
+                           IRI(""),
+                           Dict{String,IRI}(),
                            0,
                            0,
-                           Dict{String,Dict{String,Set{Union(Literal,URI)}}}())
+                           Dict{String,Dict{String,Set{Union(Literal,IRI)}}}())
 end
 
 # TODO Keeping arrays instead of iterators is memory inefficient.
 type GraphIterator
     subjects::Array{String}
     predicates::Array{String}
-    objects::Array{Union(Literal,URI)}
+    objects::Array{Union(Literal,IRI)}
     predicates_under_subject::Any
     current_subject::Any
     current_predicate::Any
 end
 
+function ==(left::IRI,
+            right::IRI)
+    return left.iri == right.iri
+end
 function blanknode!(graph::Graph)
-    iri = URI("bn://" * string(graph.blanknode))
+    iri = IRI("bn://" * string(graph.blanknode))
     graph.blanknode += 1
     return iri
 end
@@ -101,10 +108,10 @@ function load_ntriples!(graph::Graph,
         # Comment line. Ignore.
         return
     elseif beginswith(subject, "@base ") || beginswith(subject, "BASE ")
-        graph.base = URI(predicate[2:length(predicate) - 1])
+        graph.base = IRI(predicate[2:length(predicate) - 1])
         return
     elseif beginswith(subject, "@prefix ") || beginswith(subject, "PREFIX ")
-        graph.prefixes[predicate] = URI(object[2:length(object) - 1])
+        graph.prefixes[predicate] = IRI(object[2:length(object) - 1])
         return
     end
 
@@ -113,7 +120,7 @@ function load_ntriples!(graph::Graph,
     object_language = nothing
     if ismatch(r"\"^^<.+>$", object)
         object, object_type = rsplit(object, "^^", 2)
-        object_type = URI(object_type[2:length(object_type) - 1])
+        object_type = IRI(object_type[2:length(object_type) - 1])
     elseif ismatch(r"\"@.+$", object)
         object, object_language = rsplit(object, "@", 2)
     end
@@ -122,7 +129,7 @@ function load_ntriples!(graph::Graph,
 
     # Conversion of an object to its appropriate type:
     if beginswith(object, "<") && endswith(object, ">")
-        object = Literal(URI(object[2:length(object) - 1]), object_type, object_language)
+        object = Literal(IRI(object[2:length(object) - 1]), object_type, object_language)
     elseif beginswith(object, "\"") && endswith(object, "\"")
         object = Literal(object[2:length(object) - 1], object_type, object_language)
     elseif ismatch(r"^\d+\.\d+$")
@@ -369,31 +376,31 @@ function ttl_next!(graph::Graph,
         if input == '"'
             # TODO Can be optimized by nesting ifs.
             if lookahead[1] == '"' && lookahead[2] == '"' && lookahead[3] =='"' && lookahead[4] == '"'
-                transition!(state, [ :langtag, :stringdl5 ])
+                transition!(state, [ :langtypetag, :stringdl5 ])
                 return true
             elseif lookahead[1] == '"' && lookahead[2] == '"' && lookahead[3] =='"'
-                transition!(state, [ :langtag, :stringdl4 ])
+                transition!(state, [ :langtypetag, :stringdl4 ])
                 return true
             elseif lookahead[1] == '"' && lookahead[2] == '"'
-                transition!(state, [ :langtag, :stringdl3 ])
+                transition!(state, [ :langtypetag, :stringdl3 ])
                 return true
             else
-                transition!(state, [ :langtag, :stringd ])
+                transition!(state, [ :langtypetag, :stringd ])
                 return true
             end
         elseif input == '\''
             # TODO Can be optimized by nesting ifs.
             if lookahead[1] == '\'' && lookahead[2] == '\'' && lookahead[3] =='\'' && lookahead[4] == '\''
-                transition!(state, [ :langtag, :stringsl5 ])
+                transition!(state, [ :langtypetag, :stringsl5 ])
                 return true
             elseif lookahead[1] == '\'' && lookahead[2] == '\'' && lookahead[3] =='\''
-                transition!(state, [ :langtag, :stringsl4 ])
+                transition!(state, [ :langtypetag, :stringsl4 ])
                 return true
             elseif lookahead[1] == '\'' && lookahead[2] == '\''
-                transition!(state, [ :langtag, :stringsl3 ])
+                transition!(state, [ :langtypetag, :stringsl3 ])
                 return true
             else
-                transition!(state, [ :langtag, :strings ])
+                transition!(state, [ :langtypetag, :strings ])
                 return true
             end
         elseif input in [ '+', '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' ]
@@ -423,10 +430,10 @@ function ttl_next!(graph::Graph,
         if input == '.'
             polist = Base.pop!(terminals)
             subjects = Base.pop!(terminals)
-            if isa(subjects, URI)
+            if isa(subjects, IRI)
                 for po in polist
                     predicate, objects = po
-                    predicate = URI(predicate)
+                    predicate = IRI(predicate)
                     for object_list in objects
                         for object in object_list
                             push!(graph, subjects, predicate, object)
@@ -436,7 +443,7 @@ function ttl_next!(graph::Graph,
                 Base.push!(terminals, AnonymousBlankNode(graph.blanknode += 1))
             else
                 # TODO
-                error("only handles URI subjects for now")
+                error("only handles IRI subjects for now")
             end
             transition!(state)
             return true
@@ -461,14 +468,29 @@ function ttl_next!(graph::Graph,
             transition!(state)
             return false
         end
-    elseif current_state == :langtag
+    elseif current_state == :langtypetag
         if input == '@'
             transition!(state, :lang)
+            return true
+        elseif input == '^' && lookahead[1] == '^'
+            transition!(state, :typestart)
             return true
         else
             transition!(state)
             return false
         end
+    elseif current_state == :typestart
+        # Already checked that a caret is in this place; hence, proceed:
+        transition!(state, [ :typeiri, :iri ])
+        return true
+    elseif current_state == :typeiri
+        # TODO -- verify
+        typeiri = Base.pop!(terminals)
+        last(terminals).iri = typeiri
+        println(last(terminals))
+        exit(0)
+        transition!(state)
+        return false
     elseif current_state == :bnode
         # TODO
         error("TODO bnode implementation")
@@ -657,17 +679,17 @@ function reduce!(graph::Graph,
     if state == :iriref
         string_uri = utf8(token)
         if ismatch(r"^[a-zA-Z0-9_]+://", string_uri)
-            Base.push!(terminals, URI(string_uri))
+            Base.push!(terminals, IRI(string_uri))
         else
-            Base.push!(terminals, URI(string(graph.base) * string_uri))
+            Base.push!(terminals, IRI(string(graph.base) * string_uri))
         end
     elseif state == :iripname
         prefix, name = split(utf8(token), ':', 2)
-        Base.push!(terminals, URI(string(graph.prefixes[prefix]) * name))
+        Base.push!(terminals, IRI(string(graph.prefixes[prefix]) * name))
     elseif state == :pname
         Base.push!(terminals, utf8(token))
     elseif state == :verb # predicate 'a'
-        Base.push!(terminals, URI("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"))
+        Base.push!(terminals, IRI("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"))
     elseif state == :stringd || state == :strings
         Base.push!(terminals, Literal(utf8(token), nothing, nothing))
     elseif state == :integer
@@ -711,20 +733,20 @@ end
 # Adding/removing statements
 
 function push!(graph::Graph,
-               subject::URI,
-               predicate::URI,
+               subject::IRI,
+               predicate::IRI,
                object::Union(Bool,Number,String))
     # Wrap up object as a Literal:
     push!(graph, subject, predicate, Literal(object))
 end
 
 function push!(graph::Graph,
-               subject::URI,
-               predicate::URI,
-               object::Union(Literal,URI))
+               subject::IRI,
+               predicate::IRI,
+               object::Union(Literal,IRI))
     # Get dict mappings:
-    subject_dict = get(graph.statements, string(subject), Dict{String,Set{Union(Literal,URI)}}())
-    predicate_set = get(subject_dict, string(predicate), Set{Union(Literal,URI)}())
+    subject_dict = get(graph.statements, string(subject), Dict{String,Set{Union(Literal,IRI)}}())
+    predicate_set = get(subject_dict, string(predicate), Set{Union(Literal,IRI)}())
 
     # Add statement:
     objects_num = length(predicate_set)
@@ -743,7 +765,7 @@ function push!(graph::Graph,
 end
 
 function pop!(graph::Graph,
-              subject::URI)
+              subject::IRI)
     # Get dict mappings;
     if !haskey(graph.statements, string(subject))
         return 0
@@ -762,8 +784,8 @@ function pop!(graph::Graph,
 end
 
 function pop!(graph::Graph,
-              subject::URI,
-              predicate::URI)
+              subject::IRI,
+              predicate::IRI)
     # Get dict mappings:
     if !haskey(graph.statements, string(subject))
         return 0
@@ -788,9 +810,9 @@ function pop!(graph::Graph,
 end
 
 function pop!(graph::Graph,
-              subject::URI,
-              predicate::URI,
-              object::Union(Literal,URI))
+              subject::IRI,
+              predicate::IRI,
+              object::Union(Literal,IRI))
     # Get dict mappings:
     if !haskey(graph.statements, string(subject))
         return 0
@@ -820,7 +842,7 @@ end
 ### Extracting statements
 
 function get_by_subject(graph::Graph,
-                        subject::URI)
+                        subject::IRI)
     # Get dict mappings;
     if !haskey(graph.statements, string(subject))
         return 0
@@ -946,12 +968,12 @@ end
 
 function triple(subject::String,
                 predicate::String,
-                object::Union(Literal,URI))
+                object::Union(Literal,IRI))
     return uri_rdf(subject), " ", uri_rdf(predicate), " ", object_rdf(object)
 end
 
 function uri_rdf(uri::String)
-    # TODO Not complete yet; needs to handle URI encoding/escaping.
+    # TODO Not complete yet; needs to handle IRI encoding/escaping.
     return string("<", uri, ">")
 end
 
@@ -995,7 +1017,7 @@ function object_rdf(value::Bool)
     return string(value)
 end
 
-function object_rdf(value::URI)
+function object_rdf(value::IRI)
     return uri_rdf(string(value))
 end
 

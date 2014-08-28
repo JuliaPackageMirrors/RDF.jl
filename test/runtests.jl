@@ -1,10 +1,9 @@
 using RDF
 
 using Base.Test
-using URIParser
 
-@test Graph(URI("http://graphuri.test")).name == URI("http://graphuri.test")
-@test_throws MethodError Graph("http://not.an.URI.but.a.string")
+@test Graph(IRI("http://graphuri.test")).name == IRI("http://graphuri.test")
+@test_throws MethodError Graph("http://not.an.IRI.but.a.string")
 
 # On run...
 #   1 -- insert literals using Julia native types
@@ -12,27 +11,27 @@ using URIParser
 #   3 -- insert literals via Literal instances; 1 parameter
 #   4 -- insert literals via Literal instances; 2 parameters
 for run in range(1, 4)
-    g = Graph(URI("http://example.org"))
-    push!(g, URI("http://test.org/1"), URI("http://test.org/2"), URI("http://test.org/1"))
-    push!(g, URI("http://test.org/1"), URI("http://test.org/4"), URI("http://test.org/1"))
-    push!(g, URI("http://test.org/2"), URI("http://test.org/2"), URI("http://test.org/1"))
+    g = Graph(IRI("http://example.org"))
+    push!(g, IRI("http://test.org/1"), IRI("http://test.org/2"), IRI("http://test.org/1"))
+    push!(g, IRI("http://test.org/1"), IRI("http://test.org/4"), IRI("http://test.org/1"))
+    push!(g, IRI("http://test.org/2"), IRI("http://test.org/2"), IRI("http://test.org/1"))
 
     if run == 1
-        push!(g, URI("http://test.org/1"), URI("http://test.org/3"), 3.141)
-        push!(g, URI("http://test.org/1"), URI("http://test.org/4"), 123)
-        push!(g, URI("http://test.org/2"), URI("http://test.org/2"), "Hullo!")
+        push!(g, IRI("http://test.org/1"), IRI("http://test.org/3"), 3.141)
+        push!(g, IRI("http://test.org/1"), IRI("http://test.org/4"), 123)
+        push!(g, IRI("http://test.org/2"), IRI("http://test.org/2"), "Hullo!")
     elseif run == 2
-        push!(g, URI("http://test.org/1"), URI("http://test.org/3"), Literal(3.141))
-        push!(g, URI("http://test.org/1"), URI("http://test.org/4"), Literal(123))
-        push!(g, URI("http://test.org/2"), URI("http://test.org/2"), Literal("Hullo!"))
+        push!(g, IRI("http://test.org/1"), IRI("http://test.org/3"), Literal(3.141))
+        push!(g, IRI("http://test.org/1"), IRI("http://test.org/4"), Literal(123))
+        push!(g, IRI("http://test.org/2"), IRI("http://test.org/2"), Literal("Hullo!"))
     elseif run == 3
-        push!(g, URI("http://test.org/1"), URI("http://test.org/3"), Literal(3.141, URI("http://www.w3.org/2001/XMLSchema#float")))
-        push!(g, URI("http://test.org/1"), URI("http://test.org/4"), Literal(123, URI("http://www.w3.org/2001/XMLSchema#integer")))
-        push!(g, URI("http://test.org/2"), URI("http://test.org/2"), Literal("Hullo!", "en"))
+        push!(g, IRI("http://test.org/1"), IRI("http://test.org/3"), Literal(3.141, IRI("http://www.w3.org/2001/XMLSchema#float")))
+        push!(g, IRI("http://test.org/1"), IRI("http://test.org/4"), Literal(123, IRI("http://www.w3.org/2001/XMLSchema#integer")))
+        push!(g, IRI("http://test.org/2"), IRI("http://test.org/2"), Literal("Hullo!", "en"))
     elseif run == 4
-        push!(g, URI("http://test.org/1"), URI("http://test.org/3"), Literal(3.141, URI("http://www.w3.org/2001/XMLSchema#float"), nothing))
-        push!(g, URI("http://test.org/1"), URI("http://test.org/4"), Literal(123, URI("http://www.w3.org/2001/XMLSchema#integer"), nothing))
-        push!(g, URI("http://test.org/2"), URI("http://test.org/2"), Literal("Hullo!", nothing, "en"))
+        push!(g, IRI("http://test.org/1"), IRI("http://test.org/3"), Literal(3.141, IRI("http://www.w3.org/2001/XMLSchema#float"), nothing))
+        push!(g, IRI("http://test.org/1"), IRI("http://test.org/4"), Literal(123, IRI("http://www.w3.org/2001/XMLSchema#integer"), nothing))
+        push!(g, IRI("http://test.org/2"), IRI("http://test.org/2"), Literal("Hullo!", nothing, "en"))
     end
 
     @test g.size == 6
@@ -49,9 +48,9 @@ for run in range(1, 4)
     turtle(g, s)
     @test length(split(takebuf_string(s), "\n")) == 7
 
-    @test pop!(g, URI("http://test.org/2")) == 2
+    @test pop!(g, IRI("http://test.org/2")) == 2
     @test g.size == 4
-    @test pop!(g, URI("http://test.org/1"), URI("http://test.org/4")) == 2
+    @test pop!(g, IRI("http://test.org/1"), IRI("http://test.org/4")) == 2
     @test g.size == 2
 end
 
@@ -219,7 +218,7 @@ for n in range(1, length(w3c_examples))
     example = w3c_examples[n]
     num_triples, turtle = example
     println(turtle)
-    g = Graph(URI("http://example.org"))
+    g = Graph(IRI("http://example.org"))
     load_turtle!(g, IOBuffer(turtle))
 
     @test g.size == num_triples
