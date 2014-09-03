@@ -204,17 +204,28 @@ function load_turtle!(graph::Graph,
         Base.push!(lookahead, read(ttl_in, Char))
     end
 
+    # input: character that is about to be consumed, which then triggers
+    #        a shift of the lookahead, or it sets off a state change
+    # consumed:
+    #   1. number of characters that should be added to the lookahead
+    #   2. number of characters that were consumed and need to be replaced
+    #      on the following iterations
+    input = ' '
+    consumed = 1
     while !eof(ttl_in)
-        input = shift!(lookahead)
-        Base.push!(lookahead, read(ttl_in, Char))
-        while !ttl_next!(graph, state, terminals, token, input, lookahead)
+        while consumed > 0
+            input = shift!(lookahead)
+            Base.push!(lookahead, read(ttl_in, Char))
+            consumed -= 1
+        end
+        while (consumed = ttl_next!(graph, state, terminals, token, input, lookahead)) == 0
         end
     end
 
     for n in range(1, lookahead_size)
         input = shift!(lookahead)
         Base.push!(lookahead, ' ')
-        while !ttl_next!(graph, state, terminals, token, input, lookahead)
+        while (consumed = ttl_next!(graph, state, terminals, token, input, lookahead)) == 0
         end
     end
     return terminals
@@ -234,7 +245,7 @@ function ttl_next!(graph::Graph,
     """
     current_state = last(state)
 
-    println(join(state, " <- ") * " : " * string(input))
+    # println(join(state, " <- ") * " : " * string(input) * " ~ " * string(lookahead))
 
     if !(current_state in [ :iriref,
                             :iripname,
@@ -251,45 +262,45 @@ function ttl_next!(graph::Graph,
         if input == '#'
             # Skip comments to end of line.
             transition!(state, [ current_state, :comment ])
-            return true
+            return 1
         elseif input in [ ' ', '\r', '\n', '\t' ]
             # Skip whitespace.
-            return true
+            return 1
         end
     end
 
     if current_state == :skipnb
         if input in [ ' ', '\r', '\n', '\t' ]
             transition!(state)
-            return true
+            return 1
         else
-            return true
+            return 1
         end
     elseif current_state == :iri
         if input == '<'
             transition!(state, :iriref)
-            return true
+            return 1
         else
             transition!(state, :iripname)
-            return false
+            return 0
         end
     elseif current_state == :iripname
         if input in [ ' ', '\r', '\n', '\t' ] # add '<' or '_' (can't return true then, not repeated below)?
             reduce!(graph, terminals, current_state, token)
             transition!(state)
-            return true
+            return 1
         else
             Base.push!(token, input)
-            return true
+            return 1
         end
     elseif current_state == :iriref
         if input == '>'
             reduce!(graph, terminals, current_state, token)
             transition!(state)
-            return true
+            return 1
         else
             Base.push!(token, input)
-            return true
+            return 1
         end
     elseif current_state == :stringd
         ttl_string!(graph, state, terminals, token, input, lookahead, '"', uint8(0))
@@ -298,126 +309,126 @@ function ttl_next!(graph::Graph,
     elseif current_state == :integer # :integer can become :decimal or :float
         if input in [ '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' ]
             Base.push!(token, input)
-            return true
+            return 1
         elseif input in [ ' ', '\r', '\n', '\t' ]
             reduce!(graph, terminals, current_state, token)
             transition!(state)
-            return true
+            return 1
         else
             transition!(state, :decimal)
-            return false
+            return 0
         end
     elseif current_state == :decimal
         if input in [ 'e', 'E' ]
             transition!(state, :double)
-            return false
+            return 0
         elseif input in [ ' ', '\r', '\n', '\t' ]
             reduce!(graph, terminals, current_state, token)
             transition!(state)
-            return true
+            return 1
         else
             Base.push!(token, input)
             transition!(state)
-            return true
+            return 1
         end
     elseif current_state == :double
         if input in [ ' ', '\r', '\n', '\t' ]
             reduce!(graph, terminals, current_state, token)
             transition!(state)
-            return true
+            return 1
         else
             Base.push!(token, input)
-            return true
+            return 1
         end
     elseif current_state == :subject
         if input == '<'
             transition!(state, :iri)
-            return false
+            return 0
         elseif input == '('
             transition!(state, :collection)
-            return true
+            return 1
         elseif input in [ '_', '[' ]
             transition!(state, bnode)
-            return false
+            return 0
         else
             transition!(state, :iri)
-            return false
+            return 0
         end
     elseif current_state == :object
         if input == '<'
             transition!(state, :iri)
-            return false
+            return 0
         elseif input == '('
             transition!(state, :collection)
-            return true
+            return 1
         elseif input == '['
             transition!(state, :bnplist)
-            return true
+            return 1
         elseif input == '_'
             transition!(state, :bnode) # next: colon, ':'
-            return true
+            return 1
         elseif input in [ '"', '\'', '+', '-', '.', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' ]
             transition!(state, :literal)
-            return false
+            return 0
         elseif input == 'f' && lookahead[1] == 'a' && lookahead[2] == 'l' && lookahead[3] =='s' && lookahead[4] == 'e' && lookahead[5] in [ '.', '#', ' ', '\r', '\n', '\t' ]
             transition!(state, :literal)
-            return false
+            return 0
         elseif input == 't' && lookahead[1] == 'r' && lookahead[2] == 'u' && lookahead[3] =='e' && lookahead[4] in [ '.', '#', ' ', '\r', '\n', '\t' ]
             transition!(state, :literal)
-            return false
+            return 0
         else
             transition!(state, :iri)
-            return false
+            return 0
         end
     elseif current_state == :triples
         if input == '['
             transition!(state, [ :polistopt, :bnplist ])
-            return true
+            return 1
         else
             transition!(state, [ :polist, :subject ])
-            return false
+            return 0
         end
     elseif current_state == :literal
         if input == '"'
             # TODO Can be optimized by nesting ifs.
             if lookahead[1] == '"' && lookahead[2] == '"' && lookahead[3] =='"' && lookahead[4] == '"'
                 transition!(state, [ :langtypetag, :stringdl5 ])
-                return true
+                return 5
             elseif lookahead[1] == '"' && lookahead[2] == '"' && lookahead[3] =='"'
                 transition!(state, [ :langtypetag, :stringdl4 ])
-                return true
+                return 4
             elseif lookahead[1] == '"' && lookahead[2] == '"'
                 transition!(state, [ :langtypetag, :stringdl3 ])
-                return true
+                return 3
             else
                 transition!(state, [ :langtypetag, :stringd ])
-                return true
+                return 1
             end
         elseif input == '\''
             # TODO Can be optimized by nesting ifs.
             if lookahead[1] == '\'' && lookahead[2] == '\'' && lookahead[3] =='\'' && lookahead[4] == '\''
                 transition!(state, [ :langtypetag, :stringsl5 ])
-                return true
+                return 5
             elseif lookahead[1] == '\'' && lookahead[2] == '\'' && lookahead[3] =='\''
                 transition!(state, [ :langtypetag, :stringsl4 ])
-                return true
+                return 4
             elseif lookahead[1] == '\'' && lookahead[2] == '\''
                 transition!(state, [ :langtypetag, :stringsl3 ])
-                return true
+                return 3
             else
                 transition!(state, [ :langtypetag, :strings ])
-                return true
+                return 1
             end
         elseif input in [ '+', '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' ]
             transition!(state, :integer)
-            return false
+            return 0
         elseif input == '.'
             transition!(state, :decimal)
-            return false
+            return 0
         elseif input == 't'
             reduce!(graph, terminals, :true, token)
             transition!(state, :skipnb)
-            return true
+            return 1
         elseif input == 'f'
             reduce!(graph, terminals, :false, token)
             transition!(state, :skipnb)
@@ -427,7 +438,7 @@ function ttl_next!(graph::Graph,
     elseif current_state == :delim
         if input == '.'
             transition!(state)
-            return true
+            return 1
         else
             error("delimiter missing ('.')")
         end
@@ -451,7 +462,7 @@ function ttl_next!(graph::Graph,
                 error("only handles IRI subjects for now")
             end
             transition!(state)
-            return true
+            return 1
         else
             error("delimiter missing ('.') for compilation")
         end
@@ -459,56 +470,56 @@ function ttl_next!(graph::Graph,
         if input == 'a' && lookahead[1] in [ ' ', '\r', '\n', '\t' ]
             reduce!(graph, terminals, current_state, token) # token ignored
             transition!(state)
-            return true
+            return 1
         else
             transition!(state, :iri)
-            return false
+            return 0
         end
     elseif current_state == :lang
         if input in RDF_LANG
             Base.push!(token, input)
-            return true
+            return 1
         else
             reduce!(graph, terminals, current_state, token)
             transition!(state)
-            return false
+            return 0
         end
     elseif current_state == :langtypetag
         if input == '@'
             transition!(state, :lang)
-            return true
+            return 1
         elseif input == '^' && lookahead[1] == '^'
             transition!(state, :typestart)
-            return true
+            return 1
         else
             transition!(state)
-            return false
+            return 0
         end
     elseif current_state == :typestart
         # Already checked that a caret is in this place; hence, proceed:
         transition!(state, [ :typeiri, :iri ])
-        return true
+        return 1
     elseif current_state == :typeiri
         typeiri = Base.pop!(terminals)
         last(terminals).iri = typeiri
         transition!(state)
-        return false
+        return 0
     elseif current_state == :bnode
         # TODO
         error("TODO bnode implementation")
     elseif current_state == :olist
         Base.push!(terminals, Any[])
         transition!(state, [ :olistiter, :object ])
-        return false
+        return 0
     elseif current_state == :olistiter
         object = Base.pop!(terminals)
         Base.push!(last(terminals), object)
         if input == ','
             transition!(state, [ :olistiter, :object ])
-            return true
+            return 1
         else
             transition!(state)
-            return false
+            return 0
         end
     elseif current_state == :collection
         if input == ')'
@@ -519,10 +530,8 @@ function ttl_next!(graph::Graph,
     elseif current_state == :polist
         Base.push!(terminals, Dict{String, Set{Any}}())
         transition!(state, [ :polistiter, :olist, :verb ])
-        return false
+        return 0
     elseif current_state == :polistiter
-        println(" TERMINALS: ")
-        println(terminals)
         objects = Base.pop!(terminals)
         predicate = string(Base.pop!(terminals))
         polist = last(terminals)
@@ -532,18 +541,18 @@ function ttl_next!(graph::Graph,
         Base.push!(polist[predicate], objects)
         if input == ';'
             transition!(state, [ :polistiter, :olist, :verb ])
-            return true
+            return 1
         else
             transition!(state)
-            return false
+            return 0
         end
     elseif current_state == :polistopt
         if input == '.'
             transition!(state)
-            return false
+            return 0
         else
             transition!(state, [ :polistiter, :olist, :verb ])
-            return false
+            return 0
         end
     elseif current_state == :stringdl3
         ttl_string!(graph, state, terminals, token, input, lookahead, '"', uint8(3))
@@ -573,55 +582,55 @@ function ttl_next!(graph::Graph,
                 lookahead[4] in [ ' ', '\r', '\n', '\t' ]
            )
             transition!(state, [ :statement, :directive ])
-            return false
+            return 0
         elseif input == '#'
             transition!(state, [ :statement, :comment ])
-            return true
+            return 1
         else
             transition!(state, [ :statement, :compile, :triples ])
-            return false
+            return 0
         end
     elseif current_state == :directive
         if input == '@'
             transition!(state, :prefixid)
-            return true
+            return 1
         else
             transition!(state, :sparql)
-            return false
+            return 0
         end
     elseif current_state == :prefixid
         if input == 'b'
             transition!(state, [ :base, :delim, :iri, :skipnb ])
-            return true
+            return 1
         else
             transition!(state, [ :prefix, :delim, :iri, :pname, :skipnb ])
-            return true
+            return 1
         end
     elseif current_state == :sparql
         if input in [ 'b', 'B' ]
             transition!(state, [ :base, :iri, :skipnb ])
-            return true
+            return 1
         else
             transition!(state, [ :prefix, :iri, :pname, :skipnb ])
-            return true
+            return 1
         end
     elseif current_state == :comment
         if input == '\n' || input == '\r'
             transition!(state)
-            return true
+            return 1
         else
-            return true
+            return 1
         end
     elseif current_state == :base
         graph.base = Base.pop!(terminals)
         transition!(state)
-        return false
+        return 0
     elseif current_state == :prefix
         mapped_uri = Base.pop!(terminals)
         prefix = Base.pop!(terminals)
         graph.prefixes[prefix] = mapped_uri
         transition!(state)
-        return false
+        return 0
     elseif current_state == :pname
         if input == ':'
             reduce!(graph, terminals, current_state, token)
@@ -629,7 +638,7 @@ function ttl_next!(graph::Graph,
         else
             Base.push!(token, input)
         end
-        return true
+        return 1
     else
         # TODO invalid current_state
         error("invalid current_state in transition! of the universal RDF parser; bogus current_state: " * string(current_state))
@@ -648,12 +657,14 @@ function ttl_string!(graph::Graph,
         Base.push!(token, input)
         transition!(state, [ pop!(state), :escape ])
     elseif input == eos
-        if repeat > 0 && prefixn(lookahead, eos, repeat)
+        if repeat > 0 && prefixn(lookahead, eos, uint8(repeat - 1))
+            reduce!(graph, terminals, last(state), token)
+            transition!(state)
+        elseif repeat == 0
             reduce!(graph, terminals, last(state), token)
             transition!(state)
         else
-            reduce!(graph, terminals, last(state), token)
-            transition!(state)
+            Base.push!(token, input)
         end
     else
         Base.push!(token, input)
