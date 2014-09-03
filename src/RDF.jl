@@ -703,7 +703,14 @@ function reduce!(graph::Graph,
         Base.push!(terminals, utf8(token))
     elseif state == :verb # predicate 'a'
         Base.push!(terminals, IRI("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"))
-    elseif state == :stringd || state == :strings
+    elseif state == :stringd ||
+           state == :strings ||
+           state == :stringdl3 ||
+           state == :stringdl4 ||
+           state == :stringdl5 ||
+           state == :stringsl3 ||
+           state == :stringsl4 ||
+           state == :stringsl5
         Base.push!(terminals, Literal(utf8(token), nothing, nothing))
     elseif state == :integer
         Base.push!(terminals, Literal(uint(ascii(token)), nothing, nothing))
