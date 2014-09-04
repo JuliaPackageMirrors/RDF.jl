@@ -222,9 +222,14 @@ function load_turtle!(graph::Graph,
         end
     end
 
-    for n in range(1, lookahead_size)
-        input = shift!(lookahead)
-        Base.push!(lookahead, ' ')
+    # lookahead_size + 1 so that the last character is shifted out of the lookahead and then
+    # consumed as current input terminal.
+    for n in range(1, lookahead_size + 1)
+        while consumed > 0
+            input = shift!(lookahead)
+            Base.push!(lookahead, ' ')
+            consumed -= 1
+        end
         while (consumed = ttl_next!(graph, state, terminals, token, input, lookahead)) == 0
         end
     end
@@ -245,7 +250,9 @@ function ttl_next!(graph::Graph,
     """
     current_state = last(state)
 
-    # println(join(state, " <- ") * " : " * string(input) * " ~ " * string(lookahead))
+    println(" --- ")
+    println(join(terminals, " < "))
+    println(join(state, " < ") * " : " * string(input) * " ~ " * string(lookahead))
 
     if !(current_state in [ :iriref,
                             :iripname,
@@ -505,8 +512,9 @@ function ttl_next!(graph::Graph,
         transition!(state)
         return 0
     elseif current_state == :bnode
-        # TODO
-        error("TODO bnode implementation")
+        reduce!(graph, terminals, current_state, token)
+        transition!(state)
+        return 0
     elseif current_state == :olist
         Base.push!(terminals, Any[])
         transition!(state, [ :olistiter, :object ])
@@ -555,18 +563,29 @@ function ttl_next!(graph::Graph,
             return 0
         end
     elseif current_state == :stringdl3
-        ttl_string!(graph, state, terminals, token, input, lookahead, '"', uint8(3))
+        return ttl_string!(graph, state, terminals, token, input, lookahead, '"', uint8(3))
     elseif current_state == :stringdl4
-        ttl_string!(graph, state, terminals, token, input, lookahead, '"', uint8(4))
+        return ttl_string!(graph, state, terminals, token, input, lookahead, '"', uint8(4))
     elseif current_state == :stringdl5
-        ttl_string!(graph, state, terminals, token, input, lookahead, '"', uint8(5))
+        return ttl_string!(graph, state, terminals, token, input, lookahead, '"', uint8(5))
     elseif current_state == :stringsl3
-        ttl_string!(graph, state, terminals, token, input, lookahead, '\'', uint8(3))
+        return ttl_string!(graph, state, terminals, token, input, lookahead, '\'', uint8(3))
     elseif current_state == :stringsl4
-        ttl_string!(graph, state, terminals, token, input, lookahead, '\'', uint8(4))
+        return ttl_string!(graph, state, terminals, token, input, lookahead, '\'', uint8(4))
     elseif current_state == :stringsl5
-        ttl_string!(graph, state, terminals, token, input, lookahead, '\'', uint8(5))
+        return ttl_string!(graph, state, terminals, token, input, lookahead, '\'', uint8(5))
     elseif current_state == :statement
+        # There can be blank nodes floating around on the stack, which are remainders
+        # of polist iterations. With the beginning of a new statement, these can be 
+        # dropped, because they fall out of context. A new statement sets a new context
+        # for blank nodes.
+        if length(terminals) > 0
+            if length(terminals) > 1
+                error("invalid stack contents")
+            end
+            Base.pop!(terminals)
+        end
+
         # TODO check whether separators in the lookahead are correct
         if input in [ '@', 'p', 'P', 'b', 'B' ] &&
            (input == '@' ||
@@ -660,6 +679,7 @@ function ttl_string!(graph::Graph,
         if repeat > 0 && prefixn(lookahead, eos, uint8(repeat - 1))
             reduce!(graph, terminals, last(state), token)
             transition!(state)
+            return repeat
         elseif repeat == 0
             reduce!(graph, terminals, last(state), token)
             transition!(state)
@@ -669,7 +689,7 @@ function ttl_string!(graph::Graph,
     else
         Base.push!(token, input)
     end
-    return true
+    return 1
 end
 
 function prefixn(characters::Array{Char},
