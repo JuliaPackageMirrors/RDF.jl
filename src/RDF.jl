@@ -1,5 +1,18 @@
 module RDF
 
+# Design notes:
+#
+# Anonymous blank nodes are numbered. This happens on a per-graph basis.
+# To get a new number (a.k.a. ID) for a blank node, only the two following
+# patterns may be used:
+#
+#     blanknode = graph.blanknode += 1
+#     AnonymousBlankNode(blanknode)
+#
+# or
+#
+#     AnonymousBlankNode(graph.blanknode += 1)
+
 export
     # types
     Graph,
@@ -464,6 +477,9 @@ function ttl_next!(graph::Graph,
                     end
                 end
                 Base.push!(terminals, AnonymousBlankNode(graph.blanknode += 1))
+            elseif isa(subjects, AnonymousBlankNode)
+                # TODO
+                error("yeah, still todo...")
             else
                 # TODO
                 error("only handles IRI subjects for now")
@@ -555,13 +571,33 @@ function ttl_next!(graph::Graph,
             return 0
         end
     elseif current_state == :polistopt
-        if input == '.'
+        if input == '.' # end of statement
+            transition!(state)
+            return 0
+        elseif input == ']' # end of blank node property list
             transition!(state)
             return 0
         else
             transition!(state, [ :polistiter, :olist, :verb ])
             return 0
         end
+    elseif current_state == :bnplist
+        double_blanknode!(terminals, graph)
+        transition!(state, [ :bnplisto ])
+        return 0
+    elseif current_state == :bnplisto
+        if input == ']' # behaviour similar to :bnplistc (error does not apply here)
+            transition!(state)
+            return 1
+        end
+        transition!(state, [ :compile, :bnplistc, :polist ])
+        return 0
+    elseif current_state == :bnplistc
+        if input != ']'
+            error("invalid blank node property list")
+        end
+        transition!(state)
+        return 1
     elseif current_state == :stringdl3
         return ttl_string!(graph, state, terminals, token, input, lookahead, '"', uint8(3))
     elseif current_state == :stringdl4
@@ -768,6 +804,13 @@ function transition!(state::Array{Symbol},
     for next_state in next
         Base.push!(state, next_state)
     end
+end
+
+function double_blanknode!(terminals::Array{Any},
+                           graph::Graph)
+    blanknode = graph.blanknode += 1
+    Base.push!(terminals, AnonymousBlankNode(blanknode))
+    Base.push!(terminals, AnonymousBlankNode(blanknode))
 end
 
 # Adding/removing statements
